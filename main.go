@@ -93,7 +93,11 @@ const uint8_t FontCustom_Table [] PROGMEM =
 			height += 1
 		}
 		originX := float32(0)
-		originY := float32(i.CapHeight.Ceil()*-1) + 1
+		originY := float32(i.CapHeight.Ceil())
+		if originY < 0 {
+			originY *= -1
+			originY++
+		}
 		widthP = width
 		heightP = height
 
@@ -133,6 +137,8 @@ const uint8_t FontCustom_Table [] PROGMEM =
 					originX+float32(seg.Args[2].X)/64,
 					originY+float32(seg.Args[2].Y)/64,
 				)
+			default:
+				log.Fatal("OP: ", seg.Op)
 			}
 		}
 		dst := image.NewAlpha(image.Rect(0, 0, width, height))
