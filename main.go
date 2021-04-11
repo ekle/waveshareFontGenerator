@@ -18,10 +18,13 @@ import (
 )
 
 var conf struct {
-	Width        int            `short:"w" long:"width" description:"font width in bytes" default:"2"`
-	ReduceHeight int            `short:"r" long:"reducedHeight" description:"cut off the font height from the bottom" default:"-1"`
-	PPEM         int            `short:"s" long:"ppem" description:"font size" default:"24"`
-	Font         flags.Filename `short:"f" long:"font" description:"path to font file" required:"true"`
+	Width   int            `short:"w" long:"width"   description:"font width in bytes"    default:"2"`
+	Height  int            `short:"h" long:"height"  description:"font height in lines"   default:"24"`
+	PPEM    int            `short:"s" long:"ppem"    description:"font size"              default:"20"`
+	Xoffset int            `short:"x" long:"xoffset" description:"x offset for the runes" default:"0"`
+	Yoffset int            `short:"y" long:"yoffset" description:"y offset for the runes" default:"18"`
+	Font    flags.Filename `short:"f" long:"font"    description:"path to font file"      required:"true"`
+	Debug   bool           `short:"d" long:"debug"   description:"display some debug information"`
 }
 
 var parser = flags.NewParser(&conf, flags.Default)
@@ -32,7 +35,6 @@ func main() {
 		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
 			os.Exit(0)
 		} else {
-			//log.Fatal(err)
 			os.Exit(1)
 		}
 	}
@@ -49,6 +51,27 @@ func main() {
 	if err != nil {
 		log.Fatalf("Parse: %v", err)
 	}
+
+	if conf.Debug {
+		i, err := f.Metrics(nil, fixed.I(conf.PPEM), font.HintingFull)
+		if err != nil {
+			log.Fatalf("could not get font metrics: %v", err)
+		}
+		log.Println("font metrics:")
+		log.Printf("  Height:     %s\n", i.Height)
+		log.Printf("  CapHeight:  %s\n", i.CapHeight)
+		log.Printf("  Ascent:     %s\n", i.Ascent)
+		log.Printf("  CaretSlope: %s\n", i.CaretSlope)
+		log.Printf("  Descent:    %s\n", i.Descent)
+		log.Printf("  XHeight:    %s\n", i.XHeight)
+
+		log.Println("draw window:")
+		log.Println("  width:  ", conf.Width)
+		log.Println("  height: ", conf.Height)
+		log.Println("  Xoffset:", conf.Xoffset)
+		log.Println("  Yoffset:", conf.Yoffset)
+	}
+
 	fmt.Println(`#include "fonts.h"
 #if defined(__AVR__) || defined(ARDUINO_ARCH_SAMD)
 #include <avr/pgmspace.h>
@@ -59,45 +82,22 @@ func main() {
 const uint8_t FontCustom_Table [] PROGMEM =
 {
 `)
-	var widthP int
-	var heightP int
+	width := conf.Width * 8
+	height := conf.Height
 	for i := 32; i <= 126; i++ { // only printable chars
 		v := rune(i)
-		var b sfnt.Buffer
-		x, err := f.GlyphIndex(&b, v)
+		x, err := f.GlyphIndex(nil, v)
 		if err != nil {
 			log.Fatalf("GlyphIndex: %v", err)
 		}
 		if x == 0 {
 			log.Fatalf("GlyphIndex: no glyph index found for the rune '", v, "'")
 		}
-		i, err := f.Metrics(&b, fixed.I(conf.PPEM), font.HintingFull)
-		if err != nil {
-			log.Fatalf("could not get font metrics: %v", err)
-		}
-		/*
-			fmt.Printf("Height:     %s\n", i.Height)
-			fmt.Printf("CapHeight:  %s\n", i.CapHeight)
-			fmt.Printf("Ascent:     %s\n", i.Ascent)
-			fmt.Printf("CaretSlope: %s\n", i.CaretSlope)
-			fmt.Printf("Descent:    %s\n", i.Descent)
-			fmt.Printf("XHeight:    %s\n", i.XHeight)
-		*/
-		width := conf.Width * 8
-		height := i.Height.Ceil() //- conf.ReduceHeight
-		if conf.ReduceHeight >= 0 {
-			height -= conf.ReduceHeight
-		} else {
-			// usually a good default
-			height = height * 3 / 4
-			height += 1
-		}
-		originX := float32(0)
-		originY := float32(i.CapHeight.Ceil()*-1) + 1
-		widthP = width
-		heightP = height
 
-		segments, err := f.LoadGlyph(&b, x, fixed.I(conf.PPEM), nil)
+		originX := float32(conf.Xoffset)
+		originY := float32(conf.Yoffset)
+
+		segments, err := f.LoadGlyph(nil, x, fixed.I(conf.PPEM), nil)
 		if err != nil {
 			log.Fatalf("LoadGlyph: %v", err)
 		}
@@ -133,6 +133,8 @@ const uint8_t FontCustom_Table [] PROGMEM =
 					originX+float32(seg.Args[2].X)/64,
 					originY+float32(seg.Args[2].Y)/64,
 				)
+			default:
+				log.Fatal("OP: ", seg.Op)
 			}
 		}
 		dst := image.NewAlpha(image.Rect(0, 0, width, height))
@@ -168,5 +170,5 @@ const uint8_t FontCustom_Table [] PROGMEM =
   %d, /* Width */
   %d, /* Height */
 };
-`, widthP, heightP)
+`, width, height)
 }
