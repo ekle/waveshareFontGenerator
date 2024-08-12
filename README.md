@@ -7,8 +7,12 @@ This is a prototype but workes fine for me.
 As the epaper lib support only non-proportional fonts, finding the correct width can be tricky.
 You can configure the sizes with command line arguments (`go run main.go -h`).
 
-GO 1.13 is needed to compile this tool.
+GO 1.22 is needed to compile this tool.
 
 ## Usage example:
 
 `go run main.go -f /usr/share/fonts/myfont.ttf > myCustomFont.h`
+
+or
+
+`go run github.com/ekle/waveshareFontGenerator@master`
